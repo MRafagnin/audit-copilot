@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pandas as pd  # type: ignore[import-untyped]
 import pytest
@@ -68,7 +68,7 @@ def test_ask_returns_answer_and_citations(client: TestClient) -> None:
     assert body["refused"] is False
     assert body["answer"].startswith("ASA 240")
     assert body["citations"][0]["chunk_id"] == "c-1"
-    pipeline.answer.assert_called_once_with("what does ASA 240 require?")
+    pipeline.answer.assert_called_once_with("what does ASA 240 require?", company=None)
 
 
 def test_ask_rejects_short_question(client: TestClient) -> None:
@@ -148,3 +148,54 @@ def test_explain_returns_503_when_data_unavailable(client: TestClient) -> None:
     response = client.get("/explain/tx-a")
 
     assert response.status_code == 503
+
+
+def test_ask_threads_company_into_pipeline(client: TestClient) -> None:
+    """/ask forwards the ``company`` field to ``pipeline.answer``."""
+    pipeline = Mock()
+    pipeline.answer.return_value = AnswerResult(
+        answer="ok [1]",
+        citations=[Citation(tag=1, source="AUASB", section="s", page=1, chunk_id="c")],
+        refused=False,
+        reason="",
+    )
+    app.dependency_overrides[get_pipeline] = lambda: pipeline
+
+    response = client.post(
+        "/ask", json={"question": "what does ASA 240 require?", "company": "CBA"}
+    )
+
+    assert response.status_code == 200
+    pipeline.answer.assert_called_once_with("what does ASA 240 require?", company="CBA")
+
+
+def test_companies_lists_allowlist(client: TestClient) -> None:
+    response = client.get("/companies")
+    assert response.status_code == 200
+    body = response.json()
+    tickers = [c["ticker"] for c in body["items"]]
+    assert "WOW" in tickers
+    assert "CBA" in tickers
+    assert len(tickers) >= 5
+
+
+def test_ingest_unknown_ticker_returns_404(client: TestClient) -> None:
+    response = client.post("/companies/ZZZ/ingest")
+    assert response.status_code == 404
+
+
+def test_ingest_known_ticker_invokes_ingest_company(client: TestClient) -> None:
+    from src.rag.ingest_company import IngestResult
+
+    with patch(
+        "src.api.main.ingest_company",
+        return_value=IngestResult(ticker="WOW", chunks_added=12, took_ms=42, cached=False),
+    ) as mock_ingest:
+        response = client.post("/companies/wow/ingest")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ticker"] == "WOW"
+    assert body["chunks_added"] == 12
+    assert body["cached"] is False
+    mock_ingest.assert_called_once_with("WOW")

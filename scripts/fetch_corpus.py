@@ -22,10 +22,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-import requests
-
 from src.core.config import settings
 from src.core.logging_config import configure_logging
+from src.rag._http import download_pdf
+from src.rag.registry import ASX_ANNUAL_REPORTS
 
 logger = logging.getLogger(__name__)
 
@@ -72,16 +72,6 @@ AUASB_STANDARDS: tuple[CorpusSource, ...] = (
 # confirmed (the IFAC site uses session-scoped download links).
 IAASB_STANDARDS: tuple[CorpusSource, ...] = ()
 
-# Ticker -> annual report PDF URL.
-# Defaulting to Woolworths FY25. Add more entries here when expanding the demo.
-# URL verified 2026-05-22 (10.4 MB).
-ASX_ANNUAL_REPORTS: dict[str, str] = {
-    "WOW": (
-        "https://www.woolworthsgroup.com.au/content/dam/wwg/sustainability/"
-        "reports/f25/Woolworths%20Group%20Annual%20Report%202025%20.pdf"
-    ),
-}
-
 
 def _output_path(root: Path, source: CorpusSource, ticker: str | None) -> Path:
     """Return the on-disk path for a corpus source.
@@ -112,21 +102,7 @@ def download(source: CorpusSource, out_path: Path, *, user_agent: str) -> bool:
     Returns:
         True when a new download occurred, False when the cached file was kept.
     """
-    if out_path.exists() and out_path.stat().st_size > 0:
-        logger.info("corpus cached", extra={"label": source.label, "path": str(out_path)})
-        return False
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    logger.info("corpus downloading", extra={"label": source.label, "url": source.url})
-    response = requests.get(source.url, headers={"User-Agent": user_agent}, timeout=60, stream=True)
-    response.raise_for_status()
-    with out_path.open("wb") as fp:
-        for chunk in response.iter_content(chunk_size=64 * 1024):
-            if chunk:
-                fp.write(chunk)
-    logger.info(
-        "corpus downloaded", extra={"label": source.label, "bytes": out_path.stat().st_size}
-    )
-    return True
+    return download_pdf(source.url, out_path, user_agent=user_agent, label=source.label)
 
 
 def build_source_list(ticker: str) -> list[CorpusSource]:
@@ -141,10 +117,10 @@ def build_source_list(ticker: str) -> list[CorpusSource]:
     Raises:
         KeyError: When the ticker has no registered annual-report URL.
     """
-    annual_url = ASX_ANNUAL_REPORTS[ticker.upper()]
+    entry = ASX_ANNUAL_REPORTS[ticker.upper()]
     asx_source = CorpusSource(
-        label=f"{ticker.upper()}-annual-report",
-        url=annual_url,
+        label=f"{entry.ticker}-annual-report",
+        url=entry.url,
         category="asx",
     )
     return [*AUASB_STANDARDS, *IAASB_STANDARDS, asx_source]

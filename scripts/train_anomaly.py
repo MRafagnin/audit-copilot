@@ -102,9 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     ensemble.fit(X_train)
 
     val_components = ensemble.component_scores(X_val)
-    best_weights, best_val_score = calibrate_weights(
-        val_components, y_val, k=args.top_k
-    )
+    best_weights, best_val_score = calibrate_weights(val_components, y_val, k=args.top_k)
     ensemble.weights = best_weights
     logger.info(
         "ensemble weights calibrated",

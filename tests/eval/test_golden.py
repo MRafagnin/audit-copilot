@@ -53,7 +53,11 @@ def _eval_entry(pipeline: RagPipeline, entry: GoldenEntry) -> _PerEntryResult:
         )
 
     matched = sorted(
-        {doc_id for doc_id in entry.expected_doc_ids if any(doc_id in cid for cid in cited_chunk_ids)}
+        {
+            doc_id
+            for doc_id in entry.expected_doc_ids
+            if any(doc_id in cid for cid in cited_chunk_ids)
+        }
     )
     return _PerEntryResult(
         id=entry.id,
@@ -83,12 +87,8 @@ def test_golden_set_meets_thresholds() -> None:
     grounded = [r for r in per_entry if r.kind == "grounded"]
     refusals = [r for r in per_entry if r.kind == "refusal_injection"]
 
-    citation_grounding = (
-        sum(1 for r in grounded if r.passed) / len(grounded) if grounded else 0.0
-    )
-    refusal_accuracy = (
-        sum(1 for r in refusals if r.passed) / len(refusals) if refusals else 0.0
-    )
+    citation_grounding = sum(1 for r in grounded if r.passed) / len(grounded) if grounded else 0.0
+    refusal_accuracy = sum(1 for r in refusals if r.passed) / len(refusals) if refusals else 0.0
 
     METRICS_PATH.parent.mkdir(parents=True, exist_ok=True)
     payload = {

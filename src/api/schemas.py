@@ -9,6 +9,31 @@ class AskRequest(BaseModel):
     """Question payload for ``POST /ask``."""
 
     question: str = Field(min_length=3, max_length=2000)
+    company: str | None = Field(default=None, max_length=10)
+
+
+class CompanyOut(BaseModel):
+    """One company in the allowlist response."""
+
+    ticker: str
+    name: str
+    fy_label: str
+    indexed: bool
+
+
+class CompaniesResponse(BaseModel):
+    """Response from ``GET /companies``."""
+
+    items: list[CompanyOut]
+
+
+class IngestResponse(BaseModel):
+    """Response from ``POST /companies/{ticker}/ingest``."""
+
+    ticker: str
+    chunks_added: int
+    took_ms: int
+    cached: bool
 
 
 class CitationOut(BaseModel):

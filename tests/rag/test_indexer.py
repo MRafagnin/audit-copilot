@@ -20,6 +20,7 @@ class _FakeCollection:
     def __init__(self) -> None:
         self.upserted: dict[str, Any] = {}
         self.next_query: dict[str, Any] | None = None
+        self.last_query_kwargs: dict[str, Any] = {}
 
     def upsert(
         self,
@@ -36,8 +37,11 @@ class _FakeCollection:
                 "metadata": metadatas[i],
             }
 
-    def query(self, *, query_embeddings: list[list[float]], n_results: int) -> dict[str, Any]:
+    def query(
+        self, *, query_embeddings: list[list[float]], n_results: int, **kwargs: Any
+    ) -> dict[str, Any]:
         assert query_embeddings  # used
+        self.last_query_kwargs = kwargs
         if self.next_query is not None:
             return self.next_query
         ids = list(self.upserted.keys())[:n_results]
@@ -81,3 +85,20 @@ def test_add_empty_is_noop() -> None:
     index = ChromaIndex(collection=collection, embedder=_FakeEmbedder())
     index.add([])
     assert index.count() == 0
+
+
+def test_query_passes_where_filter_through() -> None:
+    collection = _FakeCollection()
+    index = ChromaIndex(collection=collection, embedder=_FakeEmbedder())
+    index.add(
+        [
+            Chunk(chunk_id="x:1:0", source="AUASB", section="s", page=1, text="alpha"),
+        ]
+    )
+
+    filter_ = {"source": {"$in": ["AUASB", "ASX-WOW"]}}
+    index.query("query", k=2, where=filter_)
+    assert collection.last_query_kwargs.get("where") == filter_
+
+    index.query("query", k=2)
+    assert "where" not in collection.last_query_kwargs

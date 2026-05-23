@@ -157,9 +157,7 @@ def test_calibrate_weights_precision_at_k_objective() -> None:
         "noisy": np.array([0.95, 0.9, 0.3, 0.2, 0.1]),
     }
     labels = np.array([False, False, False, True, True])
-    weights, p = calibrate_weights(
-        comps, labels, k=2, objective="precision_at_k"
-    )
+    weights, p = calibrate_weights(comps, labels, k=2, objective="precision_at_k")
     assert p == 1.0
     assert weights["good"] > weights["noisy"]
 

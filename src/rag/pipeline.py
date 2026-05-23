@@ -115,33 +115,39 @@ class RagPipeline:
         *,
         index: ChromaIndex,
         llm: LLMClient,
-        bm25_documents: list[tuple[str, str]] | None = None,
+        bm25_documents: list[tuple[str, str, str]] | None = None,
     ) -> None:
         """Construct the pipeline.
 
         Args:
             index: Dense vector index.
             llm: LLM client used for generation.
-            bm25_documents: Optional ``(chunk_id, text)`` pairs used to build
-                the lexical index. When omitted, lexical retrieval is skipped
-                and the pipeline returns the dense ranking unchanged.
+            bm25_documents: Optional ``(chunk_id, source, text)`` triples used
+                to build the lexical index. When omitted, lexical retrieval is
+                skipped and the pipeline returns the dense ranking unchanged.
         """
         self.index = index
         self.llm = llm
         self.bm25_ids: list[str] = []
+        self.bm25_sources: list[str] = []
         self.bm25_corpus: list[list[str]] = []
         self.bm25: BM25Okapi | None = None
         if bm25_documents:
-            self.bm25_ids = [doc_id for doc_id, _ in bm25_documents]
-            self.bm25_corpus = [_tokenize(text) for _, text in bm25_documents]
+            self.bm25_ids = [doc_id for doc_id, _, _ in bm25_documents]
+            self.bm25_sources = [source for _, source, _ in bm25_documents]
+            self.bm25_corpus = [_tokenize(text) for _, _, text in bm25_documents]
             self.bm25 = BM25Okapi(self.bm25_corpus)
 
-    def _lexical_rank(self, query: str, k: int) -> list[str]:
+    def _lexical_rank(
+        self, query: str, k: int, *, allowed_sources: set[str] | None = None
+    ) -> list[str]:
         """Return chunk ids ranked by BM25 score.
 
         Args:
             query: Tokenised query string.
             k: Maximum ids to return.
+            allowed_sources: When provided, only chunk ids whose source is in
+                this set are ranked.
 
         Returns:
             Ranked chunk ids, highest score first. Empty when BM25 was not
@@ -151,31 +157,56 @@ class RagPipeline:
             return []
         tokens = _tokenize(query)
         scores = self.bm25.get_scores(tokens)
-        ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+        candidates: list[int]
+        if allowed_sources is None:
+            candidates = list(range(len(scores)))
+        else:
+            candidates = [i for i, src in enumerate(self.bm25_sources) if src in allowed_sources]
+        ranked = sorted(candidates, key=lambda i: scores[i], reverse=True)
         return [self.bm25_ids[i] for i in ranked[:k]]
 
-    def retrieve(self, query: str, *, k: int) -> list[RetrievedChunk]:
+    @staticmethod
+    def _sources_for(company: str | None) -> set[str] | None:
+        """Build the allowed-sources set for a given company selection.
+
+        Args:
+            company: Optional ticker; when None, no filter is applied.
+
+        Returns:
+            ``{"AUASB", f"ASX-{ticker}"}`` or ``None``.
+        """
+        if company is None:
+            return None
+        return {"AUASB", f"ASX-{company.upper()}"}
+
+    def retrieve(self, query: str, *, k: int, company: str | None = None) -> list[RetrievedChunk]:
         """Run hybrid retrieval (dense + BM25 + RRF) without generation.
 
         Args:
             query: Already-sanitised retrieval query string.
             k: Maximum fused results to return.
+            company: Optional ticker; when set, retrieval is restricted to
+                ``{"AUASB", "ASX-<ticker>"}``.
 
         Returns:
             Up to ``k`` chunks ordered by fused score; empty when the index
             returns no dense hits.
         """
-        dense_hits = self.index.query(query, k=k * 2)
+        allowed = self._sources_for(company)
+        where = {"source": {"$in": sorted(allowed)}} if allowed else None
+        dense_hits = self.index.query(query, k=k * 2, where=where)
         if not dense_hits:
             return []
-        lexical_ids = self._lexical_rank(query, k=k * 2)
+        lexical_ids = self._lexical_rank(query, k=k * 2, allowed_sources=allowed)
         return _rrf_fuse(dense_hits, lexical_ids, k=k)
 
-    def answer(self, question: str) -> AnswerResult:
+    def answer(self, question: str, *, company: str | None = None) -> AnswerResult:
         """Run the full pipeline for one question.
 
         Args:
             question: Raw user question.
+            company: Optional ticker; when set, retrieval is restricted to
+                ``{"AUASB", "ASX-<ticker>"}``.
 
         Returns:
             :class:`AnswerResult` with either a grounded answer + citations
@@ -193,9 +224,11 @@ class RagPipeline:
 
         sanitized = guard.sanitized
         k = settings.rag_top_k
-        dense_hits = self.index.query(sanitized, k=k * 2)
+        allowed = self._sources_for(company)
+        where = {"source": {"$in": sorted(allowed)}} if allowed else None
+        dense_hits = self.index.query(sanitized, k=k * 2, where=where)
         if not dense_hits:
-            logger.warning("no dense hits", extra={"k": k})
+            logger.warning("no dense hits", extra={"k": k, "company": company})
             return AnswerResult(
                 answer=REFUSAL_INSUFFICIENT_GROUNDING,
                 citations=[],
@@ -216,7 +249,7 @@ class RagPipeline:
                 reason="grounding below threshold",
             )
 
-        lexical_ids = self._lexical_rank(sanitized, k=k * 2)
+        lexical_ids = self._lexical_rank(sanitized, k=k * 2, allowed_sources=allowed)
         fused = _rrf_fuse(dense_hits, lexical_ids, k=k)
 
         context_chunks = [

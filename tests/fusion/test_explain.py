@@ -55,7 +55,7 @@ def _make_explainer(
     index.query.return_value = hits
     llm = Mock()
     llm.complete.return_value = llm_response
-    bm25_docs = [(h.chunk_id, h.text) for h in hits] or None
+    bm25_docs = [(h.chunk_id, h.source, h.text) for h in hits] or None
     pipeline = RagPipeline(index=index, llm=llm, bm25_documents=bm25_docs)
     return AnomalyExplainer(pipeline=pipeline), index, llm
 

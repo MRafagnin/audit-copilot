@@ -244,11 +244,13 @@ class AnomalyExplainer:
         """
         self.pipeline = pipeline
 
-    def explain(self, tx: FlaggedTransaction) -> ExplainResult:
+    def explain(self, tx: FlaggedTransaction, *, company: str | None = None) -> ExplainResult:
         """Generate a grounded narrative for one flagged transaction.
 
         Args:
             tx: The flagged transaction.
+            company: Optional ticker; when set, retrieval is restricted to
+                ``{"AUASB", "ASX-<ticker>"}``.
 
         Returns:
             :class:`ExplainResult` containing the narrative + citations, or a
@@ -256,7 +258,7 @@ class AnomalyExplainer:
         """
         query = build_query(tx)
         k = settings.rag_top_k
-        hits = self.pipeline.retrieve(query, k=k)
+        hits = self.pipeline.retrieve(query, k=k, company=company)
         if not hits:
             logger.warning("no retrieval hits for transaction", extra={"tx_id": tx.tx_id})
             return ExplainResult(

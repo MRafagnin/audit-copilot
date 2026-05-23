@@ -154,11 +154,7 @@ def build_features(df: pd.DataFrame) -> FeatureMatrix:
     X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
     assert X.shape[1] == len(FEATURE_COLUMNS), "feature column count mismatch"
 
-    labels = (
-        df["is_anomaly"].astype(bool).to_numpy()
-        if "is_anomaly" in df.columns
-        else None
-    )
+    labels = df["is_anomaly"].astype(bool).to_numpy() if "is_anomaly" in df.columns else None
     logger.info(
         "features built",
         extra={"rows": n, "cols": X.shape[1], "labels": labels is not None},
