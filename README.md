@@ -1,12 +1,12 @@
 # AuditCopilot
 
-> Local-first, open-source AI assistant for Audit and Assurance. RAG over Australian auditing standards (**AUASB ASA**, with IAASB ISA as international reference) and a curated allowlist of ASX annual reports (default: **Woolworths Group**, `WOW`; 10 tickers ingestable on demand from the UI), plus a journal-entry anomaly-detection engine that explains each flagged transaction with cited audit-standard references.
+> Local-first, open-source AI assistant for Audit and Assurance. RAG over Australian auditing standards (**AUASB ASA**, with IAASB ISA as international reference) and a curated allowlist of ASX annual reports, plus a journal-entry anomaly-detection engine that explains each flagged transaction with cited audit-standard references.
 
 **Status:** Phase 5 — end-to-end demo live (RAG `/ask`, anomaly `/scan`, fusion `/explain`, Streamlit UI). See [PLAN.md](PLAN.md) for the full roadmap and [docs/adr/](docs/adr/) for design decisions.
 
 ## What it does
 
-1. **Ask the auditor assistant.** Hybrid RAG (BM25 + dense + reciprocal-rank fusion) over AUASB ASA and the selected ASX annual report (default `WOW`; pick another from the sidebar dropdown). Every answer cites source, section, and page. Refuses when retrieval confidence is below threshold.
+1. **Ask the auditor assistant.** Hybrid RAG (BM25 + dense + reciprocal-rank fusion) over AUASB ASA and the selected ASX annual report. Every answer cites source, section, and page. Refuses when retrieval confidence is below threshold.
 2. **Scan journal entries.** Synthetic general-ledger data with seeded fraud patterns is scored by an ensemble of `IsolationForest` + PyTorch autoencoder + KMeans.
 3. **Explain anomalies.** The hero feature — flagged transactions get a plain-English risk narrative grounded in **ASA 240** / fraud-risk indicators, with inline citations.
 
