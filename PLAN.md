@@ -209,3 +209,7 @@ Github SSH: git@github.com:MRafagnin/audit-copilot.git
 | Strong communication | README + ADRs + recorded walkthrough |
 | Collaborative mindset, continuous learning | Roadmap section + open-source repo |
 | Audit & Assurance relevance | Entire problem domain: **AUASB ASA** standards (Australian), journal-entry testing, fraud indicators — directly aligned with the Sydney role |
+
+
+uv run uvicorn src.api.main:app --reload
+uv run streamlit run app.py

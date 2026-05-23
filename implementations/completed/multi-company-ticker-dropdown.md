@@ -1,7 +1,7 @@
 # Plan: Multi-company annual reports via ticker dropdown
 
-**Date**: 2026-05-22
-**Status**: Planned (not yet implemented)
+**Date**: 2026-05-22 (completed 2026-05-23)
+**Status**: Completed
 **Branch:** `feature/multi-company-ticker-dropdown` (off `main`)
 **Files to Change**:
 

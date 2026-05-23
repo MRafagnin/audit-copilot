@@ -6,6 +6,7 @@ cards, KPI strip, feature-flag badges.
 
 Run::
 
+    uv run uvicorn src.api.main:app --reload
     uv run streamlit run app.py
 
 The backend URL defaults to ``http://localhost:8000`` and can be overridden
@@ -444,6 +445,11 @@ tab_ask, tab_scan, tab_explain = st.tabs(
 # --- Ask ---------------------------------------------------------------------
 
 with tab_ask:
+    # Apply any pending example selection BEFORE the text_area widget is
+    # instantiated — Streamlit forbids writing to a widget's key after render.
+    if "ask_pending" in st.session_state:
+        st.session_state["ask_input"] = st.session_state.pop("ask_pending")
+
     left, right = st.columns([3, 2], gap="large")
     with left:
         st.subheader("Ask a grounded question")
@@ -453,7 +459,6 @@ with tab_ask:
         )
         question = st.text_area(
             "Your question",
-            value=st.session_state.get("ask_question", ""),
             placeholder="e.g. What does ASA 240 require regarding journal entry testing?",
             height=130,
             key="ask_input",
@@ -466,10 +471,12 @@ with tab_ask:
         st.markdown("**Try one of these**")
         for i, example in enumerate(EXAMPLE_QUESTIONS):
             if st.button(example, key=f"ex_{i}", use_container_width=True):
-                st.session_state["ask_question"] = example
+                st.session_state["ask_pending"] = example
+                st.session_state["ask_autorun"] = True
                 st.rerun()
 
-    if ask_clicked:
+    submit = ask_clicked or st.session_state.pop("ask_autorun", False)
+    if submit and question.strip():
         with st.spinner("Retrieving standards and generating a grounded answer…"):
             data = _post(
                 "/ask",
