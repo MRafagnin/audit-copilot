@@ -28,16 +28,16 @@ CHUNKS_JSONL_PATH = Path("data/chunks/chunks.jsonl")
 
 
 @lru_cache(maxsize=1)
-def get_bm25_documents() -> list[tuple[str, str]]:
-    """Load ``(chunk_id, text)`` pairs from the persisted chunks file."""
+def get_bm25_documents() -> list[tuple[str, str, str]]:
+    """Load ``(chunk_id, source, text)`` triples from the persisted chunks file."""
     if not CHUNKS_JSONL_PATH.exists():
         logger.warning("chunks jsonl missing", extra={"path": str(CHUNKS_JSONL_PATH)})
         return []
-    docs: list[tuple[str, str]] = []
+    docs: list[tuple[str, str, str]] = []
     with CHUNKS_JSONL_PATH.open("r", encoding="utf-8") as fp:
         for line in fp:
             obj = json.loads(line)
-            docs.append((obj["chunk_id"], obj["text"]))
+            docs.append((obj["chunk_id"], obj.get("source", ""), obj["text"]))
     logger.info("bm25 corpus loaded", extra={"docs": len(docs)})
     return docs
 

@@ -132,19 +132,27 @@ class ChromaIndex:
         )
         logger.info("chunks upserted", extra={"count": len(chunks)})
 
-    def query(self, text: str, *, k: int) -> list[RetrievedChunk]:
+    def query(
+        self, text: str, *, k: int, where: dict[str, Any] | None = None
+    ) -> list[RetrievedChunk]:
         """Run a dense similarity search.
 
         Args:
             text: Query string.
             k: Maximum hits to return.
+            where: Optional Chroma metadata filter (e.g.
+                ``{"source": {"$in": ["AUASB", "ASX-WOW"]}}``). Passed through
+                unchanged.
 
         Returns:
             Up to ``k`` :class:`RetrievedChunk` results, ordered by score
             (highest first). Score is ``1 - distance`` clipped to ``[0, 1]``.
         """
         embedding = self.embedder.encode([text], convert_to_numpy=True).tolist()
-        raw = self.collection.query(query_embeddings=embedding, n_results=k)
+        query_kwargs: dict[str, Any] = {"query_embeddings": embedding, "n_results": k}
+        if where is not None:
+            query_kwargs["where"] = where
+        raw = self.collection.query(**query_kwargs)
         ids = raw.get("ids", [[]])[0]
         docs = raw.get("documents", [[]])[0]
         metas = raw.get("metadatas", [[]])[0]

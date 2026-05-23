@@ -24,12 +24,19 @@ import streamlit as st
 
 API_URL = os.environ.get("AUDIT_COPILOT_API", "http://localhost:8000")
 REQUEST_TIMEOUT = httpx.Timeout(180.0, connect=5.0)
+INGEST_TIMEOUT = httpx.Timeout(600.0, connect=5.0)
 
-EXAMPLE_QUESTIONS = (
+EXAMPLE_QUESTION_TEMPLATES = (
     "What does ASA 240 require regarding journal entry testing?",
     "How should auditors respond to identified risks of material misstatement?",
     "What does ASA 315 say about understanding the entity and its environment?",
-    "What does the Woolworths annual report disclose about Australian Food performance?",
+    "What are the auditor's responsibilities for fraud risk assessment under ASA 240?",
+    "How does ASA 330 require auditors to design responses to assessed risks?",
+    "What does ASA 520 require for analytical procedures during the audit?",
+    "When is a matter considered a key audit matter under ASA 701?",
+    "What does the {name} annual report disclose about segment performance?",
+    "What significant accounting estimates does {name} disclose in its latest annual report?",
+    "What related-party transactions are disclosed in the {name} annual report?",
 )
 
 FLAG_LABELS = {
@@ -172,10 +179,12 @@ st.markdown(_CSS, unsafe_allow_html=True)
 # ---------------------------------------------------------------------------
 
 
-def _post(path: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+def _post(
+    path: str, payload: dict[str, Any], *, timeout: httpx.Timeout | None = None
+) -> dict[str, Any] | None:
     """POST to the backend and surface errors as Streamlit alerts."""
     try:
-        response = httpx.post(f"{API_URL}{path}", json=payload, timeout=REQUEST_TIMEOUT)
+        response = httpx.post(f"{API_URL}{path}", json=payload, timeout=timeout or REQUEST_TIMEOUT)
     except httpx.HTTPError as exc:
         st.error(f"Request failed: {exc}")
         return None
@@ -196,6 +205,15 @@ def _get(path: str) -> dict[str, Any] | None:
         st.error(f"{path} returned {response.status_code}: {response.text}")
         return None
     return response.json()
+
+
+def _fetch_companies() -> list[dict[str, Any]]:
+    """Pull the company allowlist from the backend (empty on failure)."""
+    data = _get("/companies")
+    if data is None:
+        return []
+    items = data.get("items", [])
+    return list(items) if isinstance(items, list) else []
 
 
 def _check_health() -> tuple[bool, str]:
@@ -317,6 +335,51 @@ with st.sidebar:
     st.caption(f"`{API_URL}`")
 
     st.divider()
+    st.markdown("### Company")
+    companies = _fetch_companies() if ok else []
+    company_lookup = {c["ticker"]: c for c in companies}
+    tickers = list(company_lookup.keys())
+    if tickers:
+        default_idx = tickers.index("WOW") if "WOW" in tickers else 0
+        prior = st.session_state.get("company")
+        if prior in tickers:
+            default_idx = tickers.index(prior)
+
+        def _format_ticker(t: str) -> str:
+            c = company_lookup[t]
+            marker = "" if c["indexed"] else " · (not indexed)"
+            return f"{t} — {c['name']} ({c['fy_label']}){marker}"
+
+        selected = st.selectbox(
+            "ASX ticker",
+            tickers,
+            index=default_idx,
+            format_func=_format_ticker,
+            key="company_select",
+        )
+        st.session_state["company"] = selected
+        selected_info = company_lookup[selected]
+        if not selected_info["indexed"]:
+            st.warning(f"{selected} not yet indexed.")
+            if st.button(
+                f"Ingest {selected}", type="primary", use_container_width=True, key="ingest_btn"
+            ):
+                with st.spinner(f"Fetching and indexing {selected} annual report…"):
+                    result = _post(f"/companies/{selected}/ingest", {}, timeout=INGEST_TIMEOUT)
+                if result is not None:
+                    st.success(
+                        f"Indexed {result['chunks_added']} chunks ({result['took_ms']} ms)."
+                        if not result.get("cached")
+                        else "Already indexed."
+                    )
+                    st.rerun()
+        else:
+            st.caption(f"{selected_info['name']} · {selected_info['fy_label']} · indexed")
+    else:
+        st.info("Company list unavailable.")
+        st.session_state.setdefault("company", "WOW")
+
+    st.divider()
     st.markdown("### Stack")
     st.markdown(
         "- **RAG**: BM25 + dense (RRF)\n"
@@ -343,8 +406,13 @@ with st.sidebar:
 # Hero
 # ---------------------------------------------------------------------------
 
+_selected_company: str = st.session_state.get("company", "WOW")
+_company_info: dict[str, Any] = company_lookup.get(_selected_company, {})  # type: ignore[has-type]
+_company_name: str = str(_company_info.get("name", _selected_company))
+_company_fy: str = str(_company_info.get("fy_label", ""))
+
 st.markdown(
-    """
+    f"""
     <div class="ac-hero">
       <h1>AuditCopilot</h1>
       <p>
@@ -353,7 +421,7 @@ st.markdown(
       </p>
       <div style="margin-top:0.55rem;">
         <span class="ac-pill">AUASB · ASA 240 / 315 / 330</span>
-        <span class="ac-pill">ASX-WOW</span>
+        <span class="ac-pill">ASX-{html.escape(_selected_company)} · {html.escape(_company_fy)}</span>
         <span class="ac-pill">Local-first</span>
         <span class="ac-pill">Fail-closed guardrails</span>
       </div>
@@ -361,6 +429,8 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+EXAMPLE_QUESTIONS = tuple(q.format(name=_company_name) for q in EXAMPLE_QUESTION_TEMPLATES)
 
 
 # ---------------------------------------------------------------------------
@@ -378,8 +448,8 @@ with tab_ask:
     with left:
         st.subheader("Ask a grounded question")
         st.caption(
-            "Hybrid retrieval over AUASB ASA + ASX-WOW. Every answer is cited; the system "
-            "refuses when retrieval confidence is below threshold."
+            f"Hybrid retrieval over AUASB ASA + ASX-{_selected_company}. Every answer is cited; "
+            "the system refuses when retrieval confidence is below threshold."
         )
         question = st.text_area(
             "Your question",
@@ -401,7 +471,10 @@ with tab_ask:
 
     if ask_clicked:
         with st.spinner("Retrieving standards and generating a grounded answer…"):
-            data = _post("/ask", {"question": question.strip()})
+            data = _post(
+                "/ask",
+                {"question": question.strip(), "company": _selected_company},
+            )
         if data is not None:
             if data["refused"]:
                 _render_refusal(str(data["reason"]))
@@ -470,7 +543,9 @@ with tab_scan:
                 "description": st.column_config.TextColumn("Description", width="large"),
             },
         )
-        st.caption("Pick any `tx_id` from this list in the **Explain** tab to generate a narrative.")
+        st.caption(
+            "Pick any `tx_id` from this list in the **Explain** tab to generate a narrative."
+        )
 
 # --- Explain -----------------------------------------------------------------
 
@@ -486,9 +561,7 @@ with tab_explain:
     cols = st.columns([3, 1])
     with cols[0]:
         if options:
-            tx_id = st.selectbox(
-                "Transaction id (from latest scan)", options, key="explain_select"
-            )
+            tx_id = st.selectbox("Transaction id (from latest scan)", options, key="explain_select")
         else:
             tx_id = st.text_input(
                 "Transaction id",
@@ -517,7 +590,7 @@ with tab_explain:
 
     if explain_clicked and tx_id:
         with st.spinner("Retrieving standards and generating narrative (≈60 s on local CPU)…"):
-            data = _get(f"/explain/{tx_id}")
+            data = _get(f"/explain/{tx_id}?company={_selected_company}")
         if data is not None:
             if data["refused"]:
                 _render_refusal(str(data["reason"]))

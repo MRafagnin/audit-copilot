@@ -53,11 +53,11 @@ def main(argv: list[str] | None = None) -> int:
     if not chunks_path.exists():
         logger.error("chunks jsonl missing", extra={"path": str(chunks_path)})
         return 1
-    bm25_docs: list[tuple[str, str]] = []
+    bm25_docs: list[tuple[str, str, str]] = []
     with chunks_path.open("r", encoding="utf-8") as fp:
         for line in fp:
             obj = json.loads(line)
-            bm25_docs.append((obj["chunk_id"], obj["text"]))
+            bm25_docs.append((obj["chunk_id"], obj.get("source", ""), obj["text"]))
     logger.info("bm25 corpus loaded", extra={"docs": len(bm25_docs)})
 
     index = ChromaIndex()

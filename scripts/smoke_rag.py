@@ -19,12 +19,12 @@ from src.rag.indexer import ChromaIndex
 from src.rag.pipeline import RagPipeline
 
 
-def _load_bm25_documents(jsonl_path: Path) -> list[tuple[str, str]]:
-    docs: list[tuple[str, str]] = []
+def _load_bm25_documents(jsonl_path: Path) -> list[tuple[str, str, str]]:
+    docs: list[tuple[str, str, str]] = []
     with jsonl_path.open("r", encoding="utf-8") as fp:
         for line in fp:
             row = json.loads(line)
-            docs.append((row["chunk_id"], row["text"]))
+            docs.append((row["chunk_id"], row.get("source", ""), row["text"]))
     return docs
 
 
