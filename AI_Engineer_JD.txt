@@ -1,0 +1,39 @@
+AI Engineer | ML, GenAI, LLM, Python, Azure | Sydney
+
+About the job
+Description:
+
+
+Job Requisition ID: 41182
+Work with cutting-edge AI and machine learning technologies 
+ Flexible work arrangements – work in a way that suits you best 
+ Be part of a collaborative team shaping the future of AI-enabled audit 
+
+Do you have a passion for AI, machine learning, and solving complex business problems with data? Are you looking for an opportunity where your work will have real impact across large-scale business environments?
+
+We are seeking a talented AI Engineer to join Deloitte’s Audit & Assurance Data & Digital team. In this role, you’ll help deliver innovative AI solutions that support the vision of an AI-enabled audit, working across emerging technologies including Generative AI, LLMs, anomaly detection, clustering, and knowledge graphs. This is an exciting opportunity to contribute to high-impact projects while working alongside experienced professionals in a collaborative and forward-thinking environment.
+
+ What will your typical day look like? 
+
+ In this role, you’ll work closely with business managers, engineers, and AI specialists to design, develop, and deploy scalable AI and machine learning solutions that support core business processes and decision-making. You’ll contribute across the full AI lifecycle, from understanding business problems and designing architectures through to production deployment, monitoring, and optimisation. 
+ Day to day, you’ll be building and refining AI models, supporting the development of GenAI and LLM-based solutions, and helping ensure systems are reliable, secure, and scalable. You’ll also contribute to best practices in code quality, testing, and governance, while collaborating with stakeholders to ensure solutions align with business objectives and regulatory requirements. 
+
+About The Team
+
+ Deloitte’s Audit & Assurance business brings innovative solutions that elevate trust and create enduring value for clients. Through the use of advanced technologies, the Data & Digital team is helping shape the future of audit by embedding AI and data-driven insights into the audit process. 
+ The team works on a range of cutting-edge initiatives spanning Generative AI, machine learning, context engineering, knowledge graphs, anomaly detection, and intelligent automation. It’s a highly collaborative environment where continuous learning, innovation, and experimentation are encouraged. 
+
+Enough About Us, Let’s Talk About You.
+
+You may have all or some of the following skills / experiences:
+
+ 2–4+ years of industry experience designing, developing, and deploying machine learning or GenAI solutions 
+ Degree in Computer Science, Engineering, Mathematics, Data Science, Statistics, Physics, or a related quantitative discipline 
+ Strong Python programming skills with experience using libraries such as NumPy, Pandas, Scikit-learn, TensorFlow, or PyTorch 
+ Strong understanding of the end-to-end ML and LLM lifecycle 
+ Experience working with LLMs, prompt engineering, embeddings, RAG architectures, vector stores, semantic search, or fine-tuning techniques 
+ Understanding of AI safety, hallucination mitigation, prompt security, and privacy-preserving approaches 
+ Experience developing production-ready, well-tested, and maintainable code 
+ Exposure to MLOps or DevOps practices for deploying and managing models at scale on Azure, AWS, or GCP 
+ Strong communication and stakeholder management skills with the ability to explain technical concepts clearly 
+ A collaborative mindset with a passion for innovation, continuous learning, and emerging AI technologies 
