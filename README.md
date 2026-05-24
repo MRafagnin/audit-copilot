@@ -1,14 +1,53 @@
 # AuditCopilot
 
-> Local-first, open-source AI assistant for Audit and Assurance. RAG over Australian auditing standards (**AUASB ASA**, with IAASB ISA as international reference) and a curated allowlist of ASX annual reports, plus a journal-entry anomaly-detection engine that explains each flagged transaction with cited audit-standard references.
+> Local-first, open-source AI assistant for Audit and Assurance. Hybrid RAG over Australian auditing standards (**AUASB ASA**, with IAASB ISA as international reference) and a curated allowlist of eight ASX 50 annual reports, fused with a journal-entry anomaly-detection engine that explains each flagged transaction with cited audit-standard references.
 
-**Status:** Phase 5 — end-to-end demo live (RAG `/ask`, anomaly `/scan`, fusion `/explain`, Streamlit UI). See [PLAN.md](PLAN.md) for the full roadmap and [docs/adr/](docs/adr/) for design decisions.
+**Status:** Phase 5 — end-to-end demo live (RAG `/ask`, anomaly `/scan`, fusion `/explain`, multi-company `/companies/{ticker}/ingest`, Streamlit UI). See [PLAN.md](PLAN.md) for the full roadmap and [docs/adr/](docs/adr/) for design decisions.
+
+## The problem
+
+An external auditor evaluating fraud risk under **ASA 240** has to do two things in parallel: stay current with auditing-standard guidance (what *procedures* the standard expects given a given risk indicator) and triage the population of journal entries (which *transactions* warrant a closer look). Each task is well-served by existing tools individually — standards search, statistical anomaly tools — but the bridge between them is the auditor's head. AuditCopilot builds that bridge: anomalies flagged by the statistical layer come back with a grounded, cited explanation of *why the standard treats this pattern as a fraud-risk indicator*.
 
 ## What it does
 
-1. **Ask the auditor assistant.** Hybrid RAG (BM25 + dense + reciprocal-rank fusion) over AUASB ASA and the selected ASX annual report. Every answer cites source, section, and page. Refuses when retrieval confidence is below threshold.
-2. **Scan journal entries.** Synthetic general-ledger data with seeded fraud patterns is scored by an ensemble of `IsolationForest` + PyTorch autoencoder + KMeans.
-3. **Explain anomalies.** The hero feature — flagged transactions get a plain-English risk narrative grounded in **ASA 240** / fraud-risk indicators, with inline citations.
+### 1. Ask the auditor assistant (`POST /ask`)
+
+Grounded Q&A over two corpora, optionally scoped to one company:
+
+- **AUASB ASA standards** (always loaded) — the Australian auditing standards corpus.
+- **One ASX annual report** of the user's choice from an 8-ticker allowlist (`WOW`, `CBA`, `TLS`, `CSL`, `NAB`, `ANZ`, `RIO`, `MQG`). `WOW` ships pre-indexed; the others are fetched, chunked, embedded, and upserted into ChromaDB on demand the first time they are selected.
+
+Retrieval is hybrid: dense embeddings (`all-MiniLM-L6-v2` via ChromaDB) and lexical BM25 (`rank_bm25`) are fused with reciprocal-rank fusion (k=60) and filtered to `{AUASB} ∪ {ASX-<selected ticker>}`. Generation goes through a locked system prompt; output is parsed into a structured `{answer, citations[], refused, reason}` body. Citations carry `source`, `section`, `page`, and `chunk_id`. **Refuses when the top fused retrieval score is below `RAG_MIN_SCORE`** rather than hallucinating.
+
+### 2. Scan journal entries (`POST /scan`)
+
+A 50,000-row synthetic general ledger (`scripts/gen_journal_entries.py`, seed 42) carries known fraud patterns: round-amount postings to revenue, after-hours and weekend activity, unusual user/account pairs, near-duplicates, and Benford first-digit violations. Three detectors score every row:
+
+- **`IsolationForest`** — sklearn baseline.
+- **PyTorch autoencoder** — reconstruction error on a 3-layer MLP.
+- **`KMeans`** — cluster ID surfaces as a feature for the explainer.
+
+Rank-normalised scores are combined with calibrated weights (`iso=0.25 / ae=1.0 / kmeans=0.0`). The endpoint returns the top-N rows enriched with **16 audit-toned feature flags** — single-row signals (`is_round_amount`, `is_weekend`, `is_after_hours`, `is_large_amount`, `is_sensitive_account`, `is_benford_first_digit_9`, `is_round_credit_to_revenue`, ...) plus cross-row signals computed once at training time and persisted to `data/flagged/top_k.csv` (`is_near_duplicate`, `is_unusual_user_account`, `is_amount_outlier_for_account`). Descriptions are rendered as plausible annual-report source-refs (e.g. `"Note 11 · p.178 — Trade and other payables"`) instead of free text — the field reads as evidence, not narrative.
+
+### 3. Explain anomalies (`GET /explain/{tx_id}`) — the hero feature
+
+For a flagged transaction, `AnomalyExplainer`:
+
+1. Builds a retrieval query from the row's feature flags (each flag maps to ASA-relevant terms — e.g. `is_round_credit_to_revenue` → *revenue recognition, management override, ASA 240*).
+2. Retrieves the top-k chunks via the same hybrid pipeline, scoped to AUASB ∪ the active company.
+3. Refuses with `INSUFFICIENT_GROUNDING` if the top score is below threshold.
+4. Otherwise calls the LLM with a locked prompt that requires a 3–5 sentence narrative with `[n]` citation tags pointing at the retrieved chunks.
+
+The response is a structured `ExplainResult` (`tx_id`, `narrative`, `citations[]`, `refused`, `reason`) — same refusal contract as `/ask`.
+
+## What you see in the UI
+
+The Streamlit app ([app.py](app.py)) is built around three tabs and a sidebar:
+
+- **Sidebar** — company dropdown (8 tickers, indexed status shown), inline **Ingest \<TICKER\>** button when the selected company is not yet indexed, stack/safety summary.
+- **💬 Ask** — free-text question, prefilled example questions templated against the selected company, answer rendered with styled citation cards, refusal banner with the refusal reason.
+- **🔎 Scan** — KPI strip (flagged count, mean ensemble score, large-amount %, unusual-user %) over a sortable table of the top-N rows with feature-flag badges in severity-first order.
+- **🧭 Explain** — pick a `tx_id` from the scan list and get the grounded narrative + citations side-by-side, with the same refusal contract as the API.
 
 ## Architecture
 
@@ -17,15 +56,19 @@ flowchart LR
     subgraph UI
         ST[Streamlit app.py]
     end
-    subgraph API[FastAPI]
+    subgraph API[FastAPI src/api]
+        HEALTH[/GET /health/]
         ASK[/POST /ask/]
         SCAN[/POST /scan/]
         EXP[/GET /explain/:tx_id/]
-        HEALTH[/GET /health/]
+        COMPS[/GET /companies/]
+        ING[/POST /companies/:ticker/ingest/]
     end
     subgraph RAG[src/rag]
         GUARD[guardrails]
         PIPE[pipeline]
+        REG[registry allowlist]
+        ING2[ingest_company]
         IDX[ChromaIndex + BM25]
     end
     subgraph ANOM[src/anomaly]
@@ -38,15 +81,21 @@ flowchart LR
     LLM[(Ollama qwen2.5:7b)]
     CHROMA[(ChromaDB data/chroma)]
     GL[(data/flagged/top_k.csv)]
+    PDF[(ASX annual report PDF)]
 
     ST --> ASK
     ST --> SCAN
     ST --> EXP
+    ST --> COMPS
+    ST --> ING
     ASK --> GUARD --> PIPE --> IDX --> CHROMA
     PIPE --> LLM
     SCAN --> GL
     EXP --> EXPL --> PIPE
     EXPL --> LLM
+    COMPS --> REG
+    ING --> ING2 --> PDF
+    ING2 --> IDX
 ```
 
 ## Tech stack
@@ -71,27 +120,33 @@ uv run make run               # FastAPI on :8000, Streamlit on :8501
 src/
   core/          # config, constants, logging
   llm/           # LLMClient interface + OllamaClient
-  rag/           # ingest, indexer, pipeline, guardrails, prompts
+  rag/           # ingest, indexer, pipeline, guardrails, prompts,
+                 # registry (ASX allowlist), ingest_company (on-demand)
   anomaly/       # features, detectors, eval
   fusion/        # explain (anomaly + RAG)
-  api/           # FastAPI
+  api/           # FastAPI (main, schemas, state)
 app.py           # Streamlit
-scripts/         # fetch_corpus, gen_journal_entries, run_dev.ps1
+scripts/         # fetch_corpus, gen_journal_entries, build_index,
+                 # train_anomaly, smoke_rag, smoke_fusion, run_dev.ps1
 tests/           # mirrors src/, plus tests/eval/ (golden set)
 docs/adr/        # architecture decision records
 ```
 
 ## Make targets
 
-| Target       | What it does                                         |
-| ------------ | ---------------------------------------------------- |
-| `install`    | `uv sync --extra dev`                                |
-| `bootstrap`  | pull model, fetch corpus, gen GL data, build index   |
-| `run`        | FastAPI + Streamlit side-by-side                     |
-| `test`       | pytest with coverage gate (≥ 80%)                    |
-| `lint`       | ruff check + format check                            |
-| `typecheck`  | mypy on `src/`                                       |
-| `eval`       | golden-set + anomaly metrics                         |
+| Target       | What it does                                              |
+| ------------ | --------------------------------------------------------- |
+| `install`    | `uv sync --extra dev`                                     |
+| `bootstrap`  | pull model, fetch corpus, gen GL data, build index        |
+| `run`        | FastAPI + Streamlit side-by-side                          |
+| `api`        | FastAPI only (uvicorn on :8000)                           |
+| `ui`         | Streamlit only (:8501)                                    |
+| `test`       | pytest with coverage gate (≥ 80%)                         |
+| `lint`       | ruff check + format check                                 |
+| `format`     | ruff format (writes changes)                              |
+| `typecheck`  | mypy on `src/`                                            |
+| `eval`       | golden-set + anomaly metrics                              |
+| `clean`      | remove `__pycache__`, `.pytest_cache`, `.ruff_cache`, ... |
 
 ## AI safety inventory
 
@@ -130,7 +185,7 @@ Persisted to `data/metrics/` and regenerated by `make eval`.
 
 ## Add a new ticker
 
-The ASX allowlist lives in [src/rag/registry.py](src/rag/registry.py) as `ASX_ANNUAL_REPORTS`. Each entry is an `AnnualReport(ticker, name, url, fy_label)` pointing at a publicly hosted annual-report PDF.
+The 8-ticker allowlist lives in [src/rag/registry.py](src/rag/registry.py) as `ASX_ANNUAL_REPORTS` (currently `WOW`, `CBA`, `TLS`, `CSL`, `NAB`, `ANZ`, `RIO`, `MQG` — all FY25). Each entry is an `AnnualReport(ticker, name, url, fy_label)` pointing at a publicly hosted annual-report PDF. `BHP` and `WES` were evaluated and dropped: their CDNs reject programmatic HTTPS clients via TLS fingerprinting.
 
 To add a company:
 
