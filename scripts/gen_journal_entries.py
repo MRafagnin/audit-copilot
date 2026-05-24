@@ -65,18 +65,18 @@ ANOMALY_RATE: float = 0.05  # ~5% of rows are anomalous
 # Maps each GL account to a plausible annual-report note number, title, and
 # page range. Page numbers are sampled with the seeded rng so demos reproduce.
 ACCOUNT_NOTE_MAP: dict[str, tuple[int, str, range]] = {
-    "1000-Cash":               (8,  "Cash and cash equivalents",              range(150, 165)),
-    "1100-AccountsReceivable": (9,  "Trade and other receivables",            range(160, 175)),
-    "1200-Inventory":          (10, "Inventories",                            range(165, 180)),
-    "2000-AccountsPayable":    (11, "Trade and other payables",               range(170, 185)),
-    "2100-AccruedLiabilities": (12, "Provisions and accrued liabilities",     range(175, 190)),
-    "3000-Equity":             (20, "Contributed equity and reserves",        range(210, 225)),
-    "4000-Revenue":            (6,  "Revenue from contracts with customers", range(120, 145)),
-    "5000-COGS":               (7,  "Cost of goods sold",                     range(140, 155)),
-    "6000-OperatingExpense":   (13, "Operating expenses",                     range(180, 195)),
-    "6100-Travel":             (14, "Employee and travel expenses",           range(185, 200)),
-    "6200-Marketing":          (15, "Marketing and selling expenses",         range(190, 205)),
-    "7000-InterestExpense":    (18, "Finance costs",                          range(200, 215)),
+    "1000-Cash": (8, "Cash and cash equivalents", range(150, 165)),
+    "1100-AccountsReceivable": (9, "Trade and other receivables", range(160, 175)),
+    "1200-Inventory": (10, "Inventories", range(165, 180)),
+    "2000-AccountsPayable": (11, "Trade and other payables", range(170, 185)),
+    "2100-AccruedLiabilities": (12, "Provisions and accrued liabilities", range(175, 190)),
+    "3000-Equity": (20, "Contributed equity and reserves", range(210, 225)),
+    "4000-Revenue": (6, "Revenue from contracts with customers", range(120, 145)),
+    "5000-COGS": (7, "Cost of goods sold", range(140, 155)),
+    "6000-OperatingExpense": (13, "Operating expenses", range(180, 195)),
+    "6100-Travel": (14, "Employee and travel expenses", range(185, 200)),
+    "6200-Marketing": (15, "Marketing and selling expenses", range(190, 205)),
+    "7000-InterestExpense": (18, "Finance costs", range(200, 215)),
 }
 
 

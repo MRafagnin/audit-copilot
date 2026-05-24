@@ -90,20 +90,15 @@ _FLAG_QUERY_TERMS: dict[str, str] = {
     "is_after_hours": "journal entries posted outside normal business hours",
     "is_round_amount": "round-dollar journal entries unusual amount",
     "is_unusual_user_account": (
-        "user posting to an account outside their normal duties "
-        "segregation of duties"
+        "user posting to an account outside their normal duties segregation of duties"
     ),
     "is_benford_violation": "amount distribution violation Benford's law journal entry",
     "is_benford_first_digit_9": "Benford's law first-digit nine anomalous amount",
     "is_near_duplicate": "duplicate journal entries close in time same amount",
     "is_large_amount": "high-value journal entry materiality threshold",
-    "is_sensitive_account": (
-        "fraud risk revenue equity manual journal entries sensitive account"
-    ),
+    "is_sensitive_account": ("fraud risk revenue equity manual journal entries sensitive account"),
     "is_round_credit_to_revenue": "round-dollar revenue credit fictitious sales",
-    "is_amount_outlier_for_account": (
-        "outlier amount account population analytical procedure"
-    ),
+    "is_amount_outlier_for_account": ("outlier amount account population analytical procedure"),
 }
 
 

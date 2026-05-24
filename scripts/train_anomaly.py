@@ -63,7 +63,9 @@ _FLAG_ORDER: tuple[str, ...] = (
 
 
 def enrich_feature_flags(
-    df: pd.DataFrame, X: np.ndarray, top_idx: np.ndarray  # noqa: N803
+    df: pd.DataFrame,
+    X: np.ndarray,
+    top_idx: np.ndarray,  # noqa: N803
 ) -> list[str]:
     """Compute single-row + cross-row feature flags for the top-k rows.
 
