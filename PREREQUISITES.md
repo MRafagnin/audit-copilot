@@ -187,22 +187,24 @@ Write your choice down — you'll paste it into `.env` during Phase 0 as `HTTP_U
 
 ## 10. Pick the ASX annual report for the demo
 
-The RAG corpus needs one real Australian annual report to ground answers against. Pick a well-known ASX-listed company so demo questions feel intuitive to a Sydney panel.
+The RAG corpus is grounded against AUASB ASA standards plus one real Australian annual report at a time. `WOW` (Woolworths Group, FY25) is the **bootstrap default** — it is fetched, chunked, and indexed automatically by `uv run make bootstrap`. The other allowlist tickers are fetched on demand the first time you select them from the Streamlit sidebar (the UI calls `POST /companies/{ticker}/ingest`).
 
-Recommended candidates (all publish detailed annual reports with rich risk/internal-controls sections):
+Current 8-ticker allowlist (`src/rag/registry.py`, all FY25):
 
-| Ticker | Company | Why it's a good demo subject |
-|---|---|---|
-| `WOW` | Woolworths Group | Familiar retailer; rich risk-factor and internal-controls discussion — strong fraud-detection narrative |
-| `CBA` | Commonwealth Bank of Australia | Financial-services flavour; dense audit-relevant disclosures |
-| `BHP` | BHP Group | Mining; large, well-structured filings (also files a US 20-F) |
-| `WES` | Wesfarmers | Diversified retail/industrials — broad business segments |
-| `TLS` | Telstra | Telco; recognisable to any panel |
+| Ticker | Company                          | Indexed by bootstrap? |
+|--------|----------------------------------|------------------------|
+| `WOW`  | Woolworths Group                 | yes (default)          |
+| `CBA`  | Commonwealth Bank of Australia   | on demand              |
+| `TLS`  | Telstra Group                    | on demand              |
+| `CSL`  | CSL Limited                      | on demand              |
+| `NAB`  | National Australia Bank          | on demand              |
+| `ANZ`  | ANZ Group                        | on demand              |
+| `RIO`  | Rio Tinto                        | on demand              |
+| `MQG`  | Macquarie Group                  | on demand              |
 
-**My pick: `WOW`** — the FY25 Annual Report has substantial risk and internal-controls content, retail framing is intuitive, and "Woolworths" lands instantly with a Sydney audience.
+> `BHP` and `WES` were evaluated and dropped — both issuers' CDNs reject programmatic HTTPS clients via TLS fingerprinting, so on-demand ingest cannot fetch their annual reports without a browser-impersonation HTTP layer.
 
-Write your choice down for Phase 0.
-Choice: `WOW`
+**Default pick: `WOW`** — the FY25 Annual Report has substantial risk and internal-controls content, the retail framing is intuitive, and "Woolworths" lands instantly with a Sydney audience. No action needed; bootstrap handles it.
 ---
 
 ## 11. Set up a project folder

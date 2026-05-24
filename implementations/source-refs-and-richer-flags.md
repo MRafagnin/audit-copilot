@@ -1,7 +1,7 @@
 # Plan: Annual-report source refs + richer risk flags
 
 **Date**: 2026-05-25
-**Status**: Proposed
+**Status**: Implemented — pending verification (regen artifacts + final lint/test sweep)
 **Branch**: `feature/source-refs-and-richer-flags` (off `main`)
 
 **Files to change**:
@@ -56,6 +56,33 @@ Two changes shipped together because they share the same regeneration cycle (reg
 - **Thresholds** ($100k, bottom 5%, |z| > 3, ±15 min) live as module-level constants in their respective files — audit-domain numbers, not user-tunable settings.
 - **Flag render order is severity-first** in the UI (`is_near_duplicate`, `is_amount_outlier_for_account`, `is_unusual_user_account`, `is_round_credit_to_revenue` before the milder weekend/after-hours/round signals) so the most damning badge sits leftmost.
 - **Retrain** rather than reuse old models — `desc_len` distribution narrows substantially (all rows now ~30-char references). Recalibrating is cleaner than mixing old artifacts with new data.
+
+## Status snapshot (2026-05-25)
+
+| Phase | Item | Status |
+| --- | --- | --- |
+| 1 | `ACCOUNT_NOTE_MAP` + `_source_ref` in `gen_journal_entries.py` | Done |
+| 1 | `_build_row` uses `_source_ref`; module docstring updated | Done |
+| 1 | Regenerate `data/gl/journal_entries.csv` | Pending |
+| 2 | `derive_feature_flags` accepts `account=`; new single-row flags | Done |
+| 2 | `_LARGE_AMOUNT_THRESHOLD`, `_SENSITIVE_ACCOUNTS` constants | Done |
+| 2 | `_FLAG_QUERY_TERMS` extended | Done |
+| 2 | `flagged_transaction_from_row` prefers persisted `feature_flags` | Done |
+| 2 | `format_transaction_block` emits `source_ref:` | Done |
+| 3 | `enrich_feature_flags` + thresholds in `train_anomaly.py` | Done |
+| 3 | Severity-ordered `_FLAG_ORDER`; persisted to `top_k.csv` | Done |
+| 3 | Retrain (`scripts/train_anomaly.py`) | Pending |
+| 4 | `FLAG_LABELS` extended with severity-first ordering | Done |
+| 4 | Scan table column relabeled "Source ref" | Done |
+| 4 | `_scan_kpis` swapped to new metric mix | Done |
+| 5 | `tests/fusion/test_explain.py` — new flags, persisted column, `source_ref` label | Done |
+| 5 | `tests/anomaly/test_train_enrichment.py` — cross-row enrichment | Done |
+| 5 | `uv run pytest -q` final pass | Pending |
+| 5 | `uv run ruff check` + `uv run mypy src/` | Pending |
+| 5 | `scripts/smoke_fusion.py` eyeball | Pending |
+| 5 | Streamlit visual spot-check (Scan + Explain tabs) | Pending |
+
+Remaining work is verification only — regenerate data, retrain, and run the lint/test/smoke sweep. No further source edits planned in this scope.
 
 ## Steps
 
