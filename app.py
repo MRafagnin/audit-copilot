@@ -417,14 +417,19 @@ st.markdown(
     <div class="ac-hero">
       <h1>AuditCopilot</h1>
       <p>
-        Grounded answers from AUASB ASA standards and an ASX annual report,
-        plus anomaly detection over journal entries with cited risk narratives.
+        An AI assistant for audit teams — answers questions from auditing
+        standards and annual reports, and flags suspicious journal entries
+        with cited explanations.
+      </p>
+      <p style="margin-top:0.35rem;">
+        Every answer cites the standard, section, and page. The system
+        refuses when it cannot ground a response.
       </p>
       <div style="margin-top:0.55rem;">
-        <span class="ac-pill">AUASB · ASA 240 / 315 / 330</span>
-        <span class="ac-pill">ASX-{html.escape(_selected_company)} · {html.escape(_company_fy)}</span>
-        <span class="ac-pill">Local-first</span>
-        <span class="ac-pill">Fail-closed guardrails</span>
+        <span class="ac-pill">Standards: AUASB ASA 240 / 315 / 330 / 520 / 701</span>
+        <span class="ac-pill">Filing: ASX-{html.escape(_selected_company)} · {html.escape(_company_fy)}</span>
+        <span class="ac-pill">Anomaly engine: IsolationForest + Autoencoder + KMeans</span>
+        <span class="ac-pill">Runs locally · Ollama qwen2.5:7b</span>
       </div>
     </div>
     """,
