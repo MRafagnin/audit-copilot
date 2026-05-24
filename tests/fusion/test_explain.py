@@ -128,9 +128,7 @@ def test_format_transaction_block_quotes_description_and_strips_newlines() -> No
         ),
     ],
 )
-def test_derive_feature_flags_covers_new_signals(
-    kwargs: dict, expected: set[str]
-) -> None:
+def test_derive_feature_flags_covers_new_signals(kwargs: dict, expected: set[str]) -> None:
     assert set(derive_feature_flags(**kwargs)) == expected
 
 

@@ -41,16 +41,16 @@ EXAMPLE_QUESTION_TEMPLATES = (
 )
 
 FLAG_LABELS = {
-    "is_near_duplicate":             ("Near duplicate",       "#b91c1c"),
-    "is_amount_outlier_for_account": ("Amount outlier",       "#b91c1c"),
-    "is_unusual_user_account":       ("Unusual user/account", "#b45309"),
-    "is_round_credit_to_revenue":    ("Round credit→revenue", "#b45309"),
-    "is_benford_first_digit_9":      ("Benford 9",            "#a16207"),
-    "is_large_amount":               ("Large amount",         "#0b2545"),
-    "is_sensitive_account":          ("Sensitive account",    "#13315c"),
-    "is_weekend":                    ("Weekend",              "#7c3aed"),
-    "is_after_hours":                ("After hours",          "#0891b2"),
-    "is_round_amount":               ("Round amount",         "#d97706"),
+    "is_near_duplicate": ("Near duplicate", "#b91c1c"),
+    "is_amount_outlier_for_account": ("Amount outlier", "#b91c1c"),
+    "is_unusual_user_account": ("Unusual user/account", "#b45309"),
+    "is_round_credit_to_revenue": ("Round credit→revenue", "#b45309"),
+    "is_benford_first_digit_9": ("Benford 9", "#a16207"),
+    "is_large_amount": ("Large amount", "#0b2545"),
+    "is_sensitive_account": ("Sensitive account", "#13315c"),
+    "is_weekend": ("Weekend", "#7c3aed"),
+    "is_after_hours": ("After hours", "#0891b2"),
+    "is_round_amount": ("Round amount", "#d97706"),
 }
 
 st.set_page_config(
@@ -316,9 +316,9 @@ def _scan_kpis(items: list[dict[str, Any]]) -> None:
         return
     df = pd.DataFrame(items)
     large_pct = 100.0 * df["feature_flags"].apply(lambda fs: "is_large_amount" in fs).mean()
-    unusual_pct = 100.0 * df["feature_flags"].apply(
-        lambda fs: "is_unusual_user_account" in fs
-    ).mean()
+    unusual_pct = (
+        100.0 * df["feature_flags"].apply(lambda fs: "is_unusual_user_account" in fs).mean()
+    )
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Flagged shown", f"{len(df):,}")
     c2.metric("Mean ensemble score", f"{df['ensemble_score'].mean():.3f}")
