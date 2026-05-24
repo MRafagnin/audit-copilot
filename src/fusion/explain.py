@@ -89,13 +89,45 @@ _FLAG_QUERY_TERMS: dict[str, str] = {
     "is_weekend": "weekend journal entry posting outside business days",
     "is_after_hours": "journal entries posted outside normal business hours",
     "is_round_amount": "round-dollar journal entries unusual amount",
-    "is_unusual_user_account": "user posting to an account outside their normal duties segregation of duties",
+    "is_unusual_user_account": (
+        "user posting to an account outside their normal duties "
+        "segregation of duties"
+    ),
     "is_benford_violation": "amount distribution violation Benford's law journal entry",
+    "is_benford_first_digit_9": "Benford's law first-digit nine anomalous amount",
     "is_near_duplicate": "duplicate journal entries close in time same amount",
+    "is_large_amount": "high-value journal entry materiality threshold",
+    "is_sensitive_account": (
+        "fraud risk revenue equity manual journal entries sensitive account"
+    ),
+    "is_round_credit_to_revenue": "round-dollar revenue credit fictitious sales",
+    "is_amount_outlier_for_account": (
+        "outlier amount account population analytical procedure"
+    ),
 }
 
 
-def derive_feature_flags(*, posting_ts: str, debit: float, credit: float) -> tuple[str, ...]:
+_LARGE_AMOUNT_THRESHOLD: float = 100_000.0
+_SENSITIVE_ACCOUNTS: frozenset[str] = frozenset(
+    {"4000-Revenue", "3000-Equity", "5000-COGS", "2000-AccountsPayable"}
+)
+
+
+def _first_digit(value: float) -> int:
+    """Return the leading non-zero digit of ``|value|`` (0 when value is 0)."""
+    abs_val = abs(value)
+    if abs_val == 0:
+        return 0
+    while abs_val < 1:
+        abs_val *= 10
+    while abs_val >= 10:
+        abs_val //= 10
+    return int(abs_val)
+
+
+def derive_feature_flags(
+    *, posting_ts: str, debit: float, credit: float, account: str
+) -> tuple[str, ...]:
     """Re-derive risk flag names from raw GL fields.
 
     This mirrors the booleans the anomaly feature builder computes per row,
@@ -107,6 +139,7 @@ def derive_feature_flags(*, posting_ts: str, debit: float, credit: float) -> tup
         posting_ts: ISO posting timestamp.
         debit: Debit amount.
         credit: Credit amount.
+        account: GL account code/name.
 
     Returns:
         Tuple of flag names that fired for this row.
@@ -118,8 +151,17 @@ def derive_feature_flags(*, posting_ts: str, debit: float, credit: float) -> tup
     if ts.hour < 6 or ts.hour >= 20:
         flags.append("is_after_hours")
     amount = abs(float(debit) - float(credit))
-    if amount > 0 and amount % 1000 == 0:
+    is_round = amount > 0 and amount % 1000 == 0
+    if is_round:
         flags.append("is_round_amount")
+    if _first_digit(amount) == 9:
+        flags.append("is_benford_first_digit_9")
+    if amount >= _LARGE_AMOUNT_THRESHOLD:
+        flags.append("is_large_amount")
+    if account in _SENSITIVE_ACCOUNTS:
+        flags.append("is_sensitive_account")
+    if is_round and float(credit) > 0 and account == "4000-Revenue":
+        flags.append("is_round_credit_to_revenue")
     return tuple(flags)
 
 
@@ -137,17 +179,25 @@ def flagged_transaction_from_row(row: Mapping[str, Any]) -> FlaggedTransaction:
     posting_ts = str(row["posting_ts"])
     debit = float(row["debit"])
     credit = float(row["credit"])
+    account = str(row["account"])
+    raw_flags = row.get("feature_flags")
+    if isinstance(raw_flags, str) and raw_flags.strip():
+        flags = tuple(f for f in raw_flags.split(";") if f)
+    else:
+        flags = derive_feature_flags(
+            posting_ts=posting_ts, debit=debit, credit=credit, account=account
+        )
     return FlaggedTransaction(
         tx_id=str(row["tx_id"]),
         date=str(row["date"]),
-        account=str(row["account"]),
+        account=account,
         debit=debit,
         credit=credit,
         user=str(row["user"]),
         posting_ts=posting_ts,
         description=str(row["description"]),
         ensemble_score=float(row["ensemble_score"]),
-        feature_flags=derive_feature_flags(posting_ts=posting_ts, debit=debit, credit=credit),
+        feature_flags=flags,
     )
 
 
@@ -204,7 +254,7 @@ def format_transaction_block(tx: FlaggedTransaction) -> str:
         f"  account: {safe_account}\n"
         f"  amount: {amount:.2f} ({side})\n"
         f"  user: {safe_user}\n"
-        f'  description: "{safe_description}"\n'
+        f'  source_ref: "{safe_description}"\n'
         f"  ensemble_anomaly_score: {tx.ensemble_score:.3f}\n"
         f"  risk_indicators: {flags}"
     )

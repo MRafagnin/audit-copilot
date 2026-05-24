@@ -15,6 +15,11 @@ Schema (CSV columns)::
     tx_id, date, account, debit, credit, user, posting_ts,
     description, is_anomaly, anomaly_type
 
+The ``description`` field is a synthetic annual-report reference of the form
+``"Note N · p.NNN — Title"``. Page numbers are seeded but not resolved against
+any real indexed PDF — they exist to make the demo look like it was wired
+through to an annual report without forcing per-company GL generation.
+
 Run::
 
     uv run python scripts/gen_journal_entries.py
@@ -32,7 +37,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
-from faker import Faker
 
 from src.core.config import settings
 from src.core.logging_config import configure_logging
@@ -57,6 +61,30 @@ ACCOUNTS: tuple[str, ...] = (
 USERS: tuple[str, ...] = tuple(f"user_{i:03d}" for i in range(20))
 
 ANOMALY_RATE: float = 0.05  # ~5% of rows are anomalous
+
+# Maps each GL account to a plausible annual-report note number, title, and
+# page range. Page numbers are sampled with the seeded rng so demos reproduce.
+ACCOUNT_NOTE_MAP: dict[str, tuple[int, str, range]] = {
+    "1000-Cash":               (8,  "Cash and cash equivalents",              range(150, 165)),
+    "1100-AccountsReceivable": (9,  "Trade and other receivables",            range(160, 175)),
+    "1200-Inventory":          (10, "Inventories",                            range(165, 180)),
+    "2000-AccountsPayable":    (11, "Trade and other payables",               range(170, 185)),
+    "2100-AccruedLiabilities": (12, "Provisions and accrued liabilities",     range(175, 190)),
+    "3000-Equity":             (20, "Contributed equity and reserves",        range(210, 225)),
+    "4000-Revenue":            (6,  "Revenue from contracts with customers", range(120, 145)),
+    "5000-COGS":               (7,  "Cost of goods sold",                     range(140, 155)),
+    "6000-OperatingExpense":   (13, "Operating expenses",                     range(180, 195)),
+    "6100-Travel":             (14, "Employee and travel expenses",           range(185, 200)),
+    "6200-Marketing":          (15, "Marketing and selling expenses",         range(190, 205)),
+    "7000-InterestExpense":    (18, "Finance costs",                          range(200, 215)),
+}
+
+
+def _source_ref(rng: random.Random, account: str) -> str:
+    """Return an annual-report-style citation for ``account``."""
+    note, title, pages = ACCOUNT_NOTE_MAP[account]
+    page = rng.choice(list(pages))
+    return f"Note {note} · p.{page} — {title}"
 
 
 @dataclass(frozen=True)
@@ -145,7 +173,6 @@ def _unusual_user_account(rng: random.Random) -> tuple[str, str]:
 def _build_row(
     *,
     rng: random.Random,
-    faker: Faker,
     day: datetime,
     is_anomaly: bool,
     anomaly_type: str,
@@ -190,7 +217,7 @@ def _build_row(
         "credit": credit,
         "user": user,
         "posting_ts": ts.isoformat(timespec="seconds"),
-        "description": faker.sentence(nb_words=6),
+        "description": _source_ref(rng, account),
         "is_anomaly": is_anomaly,
         "anomaly_type": anomaly_type if is_anomaly else "",
     }
@@ -207,8 +234,6 @@ def generate(cfg: GenConfig) -> pd.DataFrame:
         ``is_anomaly`` and ``anomaly_type`` columns.
     """
     rng = random.Random(cfg.seed)
-    faker = Faker()
-    faker.seed_instance(cfg.seed)
 
     span_days = max(1, (cfg.end_date - cfg.start_date).days)
     anomaly_modes = (
@@ -230,7 +255,6 @@ def generate(cfg: GenConfig) -> pd.DataFrame:
         rows.append(
             _build_row(
                 rng=rng,
-                faker=faker,
                 day=day,
                 is_anomaly=is_anomaly,
                 anomaly_type=anomaly_type,
