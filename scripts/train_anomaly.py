@@ -34,11 +34,99 @@ from src.anomaly.detectors import (
     combine_normalised,
 )
 from src.anomaly.eval import EvalResult, evaluate, persist
-from src.anomaly.features import build_features
+from src.anomaly.features import FEATURE_COLUMNS, build_features
 from src.core.config import settings
 from src.core.logging_config import configure_logging
+from src.fusion.explain import derive_feature_flags
 
 logger = logging.getLogger(__name__)
+
+_UNUSUAL_PAIR_QUANTILE: float = 0.05
+_ZSCORE_OUTLIER: float = 3.0
+_NEAR_DUP_WINDOW_MIN: int = 15
+
+# Severity-ordered list of flag names; the order is preserved when joining
+# into the persisted ``feature_flags`` column so the UI badges render with
+# the most damning signal leftmost.
+_FLAG_ORDER: tuple[str, ...] = (
+    "is_near_duplicate",
+    "is_amount_outlier_for_account",
+    "is_unusual_user_account",
+    "is_round_credit_to_revenue",
+    "is_benford_first_digit_9",
+    "is_large_amount",
+    "is_sensitive_account",
+    "is_weekend",
+    "is_after_hours",
+    "is_round_amount",
+)
+
+
+def enrich_feature_flags(
+    df: pd.DataFrame, X: np.ndarray, top_idx: np.ndarray  # noqa: N803
+) -> list[str]:
+    """Compute single-row + cross-row feature flags for the top-k rows.
+
+    Args:
+        df: Full GL DataFrame (used for groupby-based cross-row signals).
+        X: Feature matrix aligned with ``df`` row order; columns follow
+            :data:`FEATURE_COLUMNS`.
+        top_idx: Integer positions (relative to ``df``) of the rows to enrich.
+
+    Returns:
+        List of semicolon-joined flag strings, one entry per ``top_idx`` row,
+        in severity-first order.
+    """
+    pair_col = FEATURE_COLUMNS.index("user_account_freq")
+    z_col = FEATURE_COLUMNS.index("amount_zscore_per_account")
+
+    pair_threshold = float(np.quantile(X[:, pair_col], _UNUSUAL_PAIR_QUANTILE))
+
+    # Near-duplicate detection over the full frame: same (account, rounded
+    # amount) with another row within ``_NEAR_DUP_WINDOW_MIN`` minutes.
+    amount_abs = np.abs(df["debit"].to_numpy() - df["credit"].to_numpy())
+    work = pd.DataFrame(
+        {
+            "account": df["account"].to_numpy(),
+            "amount_key": np.round(amount_abs, 2),
+            "ts": pd.to_datetime(df["posting_ts"]),
+        }
+    )
+    near_dup = np.zeros(len(df), dtype=bool)
+    window = pd.Timedelta(minutes=_NEAR_DUP_WINDOW_MIN)
+    for _, group in work.groupby(["account", "amount_key"], sort=False):
+        if len(group) < 2:
+            continue
+        ts_sorted = group.sort_values("ts")
+        ts_vals = ts_sorted["ts"].to_numpy()
+        diffs_next = np.diff(ts_vals)
+        is_dup = np.zeros(len(ts_vals), dtype=bool)
+        for i in range(len(ts_vals)):
+            if i < len(diffs_next) and diffs_next[i] <= window:
+                is_dup[i] = True
+                is_dup[i + 1] = True
+        near_dup[ts_sorted.index.to_numpy()] = is_dup
+
+    out: list[str] = []
+    for pos in top_idx:
+        row = df.iloc[pos]
+        flags = set(
+            derive_feature_flags(
+                posting_ts=str(row["posting_ts"]),
+                debit=float(row["debit"]),
+                credit=float(row["credit"]),
+                account=str(row["account"]),
+            )
+        )
+        if X[pos, pair_col] <= pair_threshold:
+            flags.add("is_unusual_user_account")
+        if abs(float(X[pos, z_col])) > _ZSCORE_OUTLIER:
+            flags.add("is_amount_outlier_for_account")
+        if near_dup[pos]:
+            flags.add("is_near_duplicate")
+        ordered = [f for f in _FLAG_ORDER if f in flags]
+        out.append(";".join(ordered))
+    return out
 
 
 def _three_way_split(
@@ -142,6 +230,7 @@ def main(argv: list[str] | None = None) -> int:
     flagged["ensemble_score"] = ensemble_scores[top_idx_local]
     for name, scores in components.items():
         flagged[f"{name}_score"] = scores[top_idx_local]
+    flagged["feature_flags"] = enrich_feature_flags(df, fm.X, original_idx)
 
     flagged_path = Path(args.flagged)
     flagged_path.parent.mkdir(parents=True, exist_ok=True)
