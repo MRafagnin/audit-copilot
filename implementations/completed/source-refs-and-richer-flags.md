@@ -1,8 +1,10 @@
 # Plan: Annual-report source refs + richer risk flags
 
 **Date**: 2026-05-25
-**Status**: Implemented — pending verification (regen artifacts + final lint/test sweep)
+**Status**: Closed — source edits shipped. Verification + remaining checklist items handed off to [verify-source-refs-and-richer-flags.md](verify-source-refs-and-richer-flags.md).
 **Branch**: `feature/source-refs-and-richer-flags` (off `main`)
+
+> **Handoff (2026-05-25)**: Phases 1–4 source edits and Phase 5 tests are done. All remaining "Pending" rows in the Status snapshot and every unchecked item in the Verification checklist below are tracked in the successor plan and will be ticked off there. This file is kept for design/decision history only — do not edit further.
 
 **Files to change**:
 
